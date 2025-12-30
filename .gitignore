@@ -129,3 +129,61 @@ results/
 *debug*
 *old*
 *.sh
+
+# 权重文件（模型文件，很大，不要上传）
+weights/*.pth
+weights/*.pt
+weights/*.ckpt
+weights/*.safetensors
+*.pth
+*.pt
+ProPainter.pth
+recurrent_flow_completion.pth
+
+# 输出文件
+outputs/
+video_object_removal_web/outputs/
+video_object_removal_web/uploads/
+debug_output/
+
+# 输入文件（测试视频，很大）
+inputs/video_completion/*.mp4
+inputs/object_removal/*.png
+inputs/object_removal/*.jpg
+inputs/*.zip
+
+# GroundingDINO 构建文件
+GroundingDINO/build/
+GroundingDINO/groundingdino.egg-info/
+GroundingDINO/*.egg-info/
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+
+# 环境变量
+.env
+.env.local
+
+# 大文件
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.gif
+*.zip
+*.tar
+*.gz

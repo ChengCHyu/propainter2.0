@@ -178,6 +178,17 @@ if __name__ == '__main__':
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = get_device()
     
+    # 打印设备信息
+    print("=" * 60)
+    print(f"[ProPainter] 使用设备: {device}")
+    if device.type == 'cuda':
+        print(f"[ProPainter] GPU名称: {torch.cuda.get_device_name(0)}")
+        print(f"[ProPainter] GPU显存: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+    else:
+        print("[ProPainter] WARNING: Using CPU (slower)")
+    print("=" * 60)
+    print()
+    
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-i', '--video', type=str, default='inputs/object_removal/bmx-trees', help='Path of the input video or image folder.')
