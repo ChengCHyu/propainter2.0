@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频物体删除工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        #videoCanvas {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            cursor: crosshair;
+        }
+
+        .video-controls {
+            background: #333;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .video-controls-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .progress-slider-container {
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .progress-slider {
+            flex: 1;
+            height: 6px;
+            background: #555;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+        }
+
+        .progress-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .progress-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .time-display {
+            color: white;
+            font-family: monospace;
+            font-size: 0.9em;
+            min-width: 100px;
+        }
+
+        .skip-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-skip {
+            padding: 8px 12px;
+            background: #5a6268;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .btn-skip:hover {
+            background: #495057;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            background: #5568d3;
+        }
+
+        .bbox-list {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .bbox-item {
+            background: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .bbox-item span {
+            font-family: monospace;
+            color: #333;
+        }
+
+        .bbox-item button {
+            padding: 5px 15px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .bbox-item button:hover {
+            background: #c82333;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .progress {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .instructions h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            color: #856404;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .mode-option {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .mode-option:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .mode-option.active {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .text-input-section {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .text-input-section.active {
+            display: block;
+        }
+
+        .text-input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .text-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            font-family: inherit;
+        }
+
+        .text-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .text-input-hint {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .bbox-section {
+            display: none;
+        }
+
+        .bbox-section.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 视频物体删除工具</h1>
+        <p class="subtitle">上传视频，框选要删除的物体，自动生成掩码</p>
+
+        <div class="instructions">
+            <h3>使用说明：</h3>
+            <ol>
+                <li>点击"选择视频"按钮上传视频文件</li>
+                <li>视频加载后，点击播放按钮开始播放</li>
+                <li>暂停到想要框选物体的帧</li>
+                <li>在画面上按住鼠标左键拖拽，框选要删除的物体（可框选多个）</li>
+                <li>点击"开始处理"按钮，系统会自动生成掩码并删除物体</li>
+                <li>处理完成后，可以在页面中预览和下载处理后的视频</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <div class="section-title">1. 上传视频</div>
+            <label for="videoInput" class="file-input-label">选择视频文件</label>
+            <input type="file" id="videoInput" accept="video/*">
+            <span id="videoFileName" style="margin-left: 20px; color: #666;"></span>
+        </div>
+
+        <div class="section">
+            <div class="section-title">2. 选择物体（文本输入或手动框选）</div>
+            
+            <!-- 模式选择 -->
+            <div class="mode-selector">
+                <div class="mode-option active" data-mode="text" id="textModeBtn">
+                    📝 文本输入（自然语言描述）
+                </div>
+                <div class="mode-option" data-mode="bbox" id="bboxModeBtn">
+                    🖱️ 手动框选
+                </div>
+            </div>
+
+            <!-- 视频播放器（两种模式共用） -->
+            <div class="video-container">
+                <canvas id="videoCanvas"></canvas>
+                <div class="video-controls">
+                    <div class="video-controls-row">
+                        <button class="btn btn-primary" id="playPauseBtn" disabled>播放</button>
+                        <div class="skip-buttons">
+                            <button class="btn-skip" id="skipBackwardBtn" disabled title="向后5秒">⏪ -5s</button>
+                            <button class="btn-skip" id="skipForwardBtn" disabled title="向前5秒">⏩ +5s</button>
+                        </div>
+                        <button class="btn btn-secondary" id="resetBtn" disabled>重置选择</button>
+                        <span style="color: white; margin-left: auto;">
+                            帧: <span id="frameInfo">-</span>
+                        </span>
+                    </div>
+                    <div class="video-controls-row">
+                        <div class="progress-slider-container">
+                            <input type="range" class="progress-slider" id="progressSlider" min="0" max="100" value="0" step="0.1" disabled>
+                            <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文本输入模式 -->
+            <div class="text-input-section active" id="textInputSection">
+                <div class="text-input-container">
+                    <input type="text" 
+                           class="text-input" 
+                           id="textInput" 
+                           placeholder="例如：删除视频中的汽车、移除人物、去掉红色物体等..."
+                           disabled>
+                    <button class="btn btn-primary" id="generateBboxBtn" disabled>生成边界框</button>
+                </div>
+                <div class="text-input-hint">
+                    💡 <strong>提示：</strong>可以用自然语言描述要删除的物体，例如：
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li>"删除视频中的汽车"</li>
+                        <li>"移除人物"</li>
+                        <li>"去掉红色物体"</li>
+                        <li>"删除背景中的树"</li>
+                    </ul>
+                    系统会自动在第一帧中检测并定位目标物体。生成的边界框会显示在上方视频中。
+                </div>
+            </div>
+
+            <!-- 手动框选模式提示 -->
+            <div class="bbox-section" id="bboxSection">
+                <div style="padding: 15px; background: #e7f3ff; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #2196F3;">
+                    <strong>💡 使用说明：</strong>在视频上按住鼠标左键拖拽，框选要删除的物体。可以框选多个物体。
+                </div>
+            </div>
+
+            <!-- 边界框列表（两种模式共用） -->
+            <div class="bbox-list" id="bboxList" style="margin-top: 20px;">
+                <div style="text-align: center; color: #999; padding: 20px;">
+                    暂未选择物体，请使用文本输入或手动框选
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">3. 处理视频（生成掩码并删除物体）</div>
+            <button class="btn btn-success" id="processBtn" disabled>开始处理</button>
+            <div class="progress" id="progress">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+            <div class="status" id="status"></div>
+            
+            <div id="resultSection" style="display: none; margin-top: 30px;">
+                <div class="section-title">处理结果</div>
+                <video id="outputVideo" controls style="width: 100%; max-width: 800px; border-radius: 10px; background: #000;"></video>
+                <div style="margin-top: 15px;">
+                    <a id="downloadLink" href="#" download class="btn btn-primary">下载处理后的视频</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const videoInput = document.getElementById('videoInput');
+        const videoCanvas = document.getElementById('videoCanvas');
+        const ctx = videoCanvas.getContext('2d');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const processBtn = document.getElementById('processBtn');
+        const bboxList = document.getElementById('bboxList');
+        const status = document.getElementById('status');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        const frameInfo = document.getElementById('frameInfo');
+        const videoFileName = document.getElementById('videoFileName');
+        const progressSlider = document.getElementById('progressSlider');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const skipBackwardBtn = document.getElementById('skipBackwardBtn');
+        const skipForwardBtn = document.getElementById('skipForwardBtn');
+        const textModeBtn = document.getElementById('textModeBtn');
+        const bboxModeBtn = document.getElementById('bboxModeBtn');
+        const textInputSection = document.getElementById('textInputSection');
+        const bboxSection = document.getElementById('bboxSection');
+        const textInput = document.getElementById('textInput');
+        const generateBboxBtn = document.getElementById('generateBboxBtn');
+
+        let video = document.createElement('video');
+        let bboxes = [];
+        let isDrawing = false;
+        let startX = 0;
+        let startY = 0;
+        let currentBbox = null;
+        let animationFrame = null;
+        let videoFile = null;
+        let isSliderDragging = false;
+        let currentMode = 'text'; // 'text' 或 'bbox'
+
+        // 视频文件选择
+        videoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                videoFile = file;
+                videoFileName.textContent = file.name;
+                const url = URL.createObjectURL(file);
+                video.src = url;
+                video.onloadedmetadata = () => {
+                    videoCanvas.width = video.videoWidth;
+                    videoCanvas.height = video.videoHeight;
+                    playPauseBtn.disabled = false;
+                    resetBtn.disabled = false;
+                    progressSlider.disabled = false;
+                    skipBackwardBtn.disabled = false;
+                    skipForwardBtn.disabled = false;
+                    textInput.disabled = false;
+                    generateBboxBtn.disabled = false;
+                    progressSlider.max = video.duration || 100;
+                    updateTimeDisplay();
+                    drawFrame();
+                };
+            }
+        });
+
+        // 格式化时间
+        function formatTime(seconds) {
+            if (!isFinite(seconds) || isNaN(seconds)) return '00:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        // 更新时间显示
+        function updateTimeDisplay() {
+            if (video.duration) {
+                timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+            }
+        }
+
+        // 更新进度条
+        function updateProgressSlider() {
+            if (!isSliderDragging && video.duration) {
+                progressSlider.value = video.currentTime;
+            }
+        }
+
+        // 进度条拖动
+        progressSlider.addEventListener('input', (e) => {
+            isSliderDragging = true;
+            if (video.duration) {
+                video.currentTime = parseFloat(e.target.value);
+                updateTimeDisplay();
+                drawFrame();
+            }
+        });
+
+        progressSlider.addEventListener('mousedown', () => {
+            isSliderDragging = true;
+            video.pause();
+            playPauseBtn.textContent = '播放';
+            cancelAnimationFrame(animationFrame);
+        });
+
+        progressSlider.addEventListener('mouseup', () => {
+            isSliderDragging = false;
+        });
+
+        // 快进/快退按钮
+        skipForwardBtn.addEventListener('click', () => {
+            if (video.duration) {
+                video.currentTime = Math.min(video.currentTime + 5, video.duration);
+                updateTimeDisplay();
+                updateProgressSlider();
+                drawFrame();
+            }
+        });
+
+        skipBackwardBtn.addEventListener('click', () => {
+            if (video.duration) {
+                video.currentTime = Math.max(video.currentTime - 5, 0);
+                updateTimeDisplay();
+                updateProgressSlider();
+                drawFrame();
+            }
+        });
+
+        // 播放/暂停
+        playPauseBtn.addEventListener('click', () => {
+            if (video.paused) {
+                video.play();
+                playPauseBtn.textContent = '暂停';
+                play();
+            } else {
+                video.pause();
+                playPauseBtn.textContent = '播放';
+                cancelAnimationFrame(animationFrame);
+            }
+        });
+
+        // 播放循环
+        function play() {
+            if (!video.paused) {
+                drawFrame();
+                updateProgressSlider();
+                updateTimeDisplay();
+                animationFrame = requestAnimationFrame(play);
+            }
+        }
+
+        // 视频时间更新事件
+        video.addEventListener('timeupdate', () => {
+            if (!isSliderDragging) {
+                updateProgressSlider();
+                updateTimeDisplay();
+            }
+        });
+
+        // 绘制帧
+        function drawFrame() {
+            ctx.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+            
+            // 绘制所有边界框
+            bboxes.forEach((bbox, index) => {
+                const [x1, y1, x2, y2] = bbox;
+                ctx.strokeStyle = `hsl(${index * 60}, 70%, 50%)`;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                
+                // 绘制标签
+                ctx.fillStyle = `hsl(${index * 60}, 70%, 50%)`;
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText(`物体 ${index + 1}`, x1, y1 - 5);
+            });
+            
+            // 绘制当前正在绘制的边界框
+            if (currentBbox) {
+                const [x1, y1, x2, y2] = currentBbox;
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            }
+            
+            if (video.duration) {
+                const fps = 30; // 默认帧率
+                frameInfo.textContent = `${Math.floor(video.currentTime * fps)} / ${Math.floor(video.duration * fps)}`;
+            } else {
+                frameInfo.textContent = '-';
+            }
+        }
+
+        // 鼠标事件 - 开始绘制（仅在手动框选模式下）
+        videoCanvas.addEventListener('mousedown', (e) => {
+            if (currentMode === 'bbox' && video.paused) {
+                const rect = videoCanvas.getBoundingClientRect();
+                const scaleX = videoCanvas.width / rect.width;
+                const scaleY = videoCanvas.height / rect.height;
+                startX = (e.clientX - rect.left) * scaleX;
+                startY = (e.clientY - rect.top) * scaleY;
+                isDrawing = true;
+            }
+        });
+
+        // 鼠标事件 - 绘制中
+        videoCanvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                const rect = videoCanvas.getBoundingClientRect();
+                const scaleX = videoCanvas.width / rect.width;
+                const scaleY = videoCanvas.height / rect.height;
+                const currentX = (e.clientX - rect.left) * scaleX;
+                const currentY = (e.clientY - rect.top) * scaleY;
+                currentBbox = [
+                    Math.min(startX, currentX),
+                    Math.min(startY, currentY),
+                    Math.max(startX, currentX),
+                    Math.max(startY, currentY)
+                ];
+                drawFrame();
+            }
+        });
+
+        // 鼠标事件 - 结束绘制
+        videoCanvas.addEventListener('mouseup', (e) => {
+            if (isDrawing) {
+                isDrawing = false;
+                if (currentBbox) {
+                    const [x1, y1, x2, y2] = currentBbox;
+                    if (Math.abs(x2 - x1) > 10 && Math.abs(y2 - y1) > 10) {
+                        bboxes.push([x1, y1, x2, y2]);
+                        updateBboxList();
+                        processBtn.disabled = bboxes.length === 0;
+                    }
+                }
+                currentBbox = null;
+                drawFrame();
+            }
+        });
+
+        // 更新边界框列表
+        function updateBboxList() {
+            if (bboxes.length === 0) {
+                bboxList.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂未选择物体，请在视频上拖拽框选</div>';
+            } else {
+                bboxList.innerHTML = bboxes.map((bbox, index) => `
+                    <div class="bbox-item">
+                        <span>物体 ${index + 1}: [${Math.round(bbox[0])}, ${Math.round(bbox[1])}, ${Math.round(bbox[2])}, ${Math.round(bbox[3])}]</span>
+                        <button onclick="removeBbox(${index})">删除</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // 删除边界框
+        window.removeBbox = function(index) {
+            bboxes.splice(index, 1);
+            updateBboxList();
+            drawFrame();
+            processBtn.disabled = bboxes.length === 0;
+        };
+
+        // 模式切换
+        textModeBtn.addEventListener('click', () => {
+            currentMode = 'text';
+            textModeBtn.classList.add('active');
+            bboxModeBtn.classList.remove('active');
+            textInputSection.classList.add('active');
+            bboxSection.classList.remove('active');
+        });
+
+        bboxModeBtn.addEventListener('click', () => {
+            currentMode = 'bbox';
+            bboxModeBtn.classList.add('active');
+            textModeBtn.classList.remove('active');
+            textInputSection.classList.remove('active');
+            bboxSection.classList.add('active');
+        });
+
+        // 文本输入生成边界框
+        generateBboxBtn.addEventListener('click', async () => {
+            const textPrompt = textInput.value.trim();
+            if (!textPrompt) {
+                showStatus('请输入要删除物体的描述', 'error');
+                return;
+            }
+
+            if (!videoFile) {
+                showStatus('请先上传视频', 'error');
+                return;
+            }
+
+            generateBboxBtn.disabled = true;
+            generateBboxBtn.textContent = '生成中...';
+            showStatus('正在生成边界框...', 'info');
+
+            try {
+                // 上传视频（如果还没上传）
+                let videoPath = null;
+                if (!videoFile.uploaded) {
+                    const formData = new FormData();
+                    formData.append('video', videoFile);
+                    
+                    const uploadResponse = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!uploadResponse.ok) {
+                        const errorData = await uploadResponse.json();
+                        throw new Error(errorData.error || '上传失败');
+                    }
+
+                    const uploadResult = await uploadResponse.json();
+                    videoPath = uploadResult.path;
+                    videoFile.uploaded = true;
+                    videoFile.path = videoPath;
+                } else {
+                    videoPath = videoFile.path;
+                }
+
+                // 调用文本转边界框API
+                const response = await fetch('/api/text_to_bbox', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        video_path: videoPath,
+                        text_prompt: textPrompt
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '生成边界框失败');
+                }
+
+                const result = await response.json();
+                
+                if (result.status === 'success' && result.bboxes && result.bboxes.length > 0) {
+                    bboxes = result.bboxes;
+                    updateBboxList();
+                    drawFrame();
+                    processBtn.disabled = false;
+                    showStatus(`✅ 成功生成 ${bboxes.length} 个边界框`, 'success');
+                } else {
+                    throw new Error(result.error || '未检测到目标物体，请尝试更具体的描述');
+                }
+            } catch (error) {
+                showStatus(`❌ 错误: ${error.message}`, 'error');
+            } finally {
+                generateBboxBtn.disabled = false;
+                generateBboxBtn.textContent = '生成边界框';
+            }
+        });
+
+        // 支持回车键生成边界框
+        textInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !generateBboxBtn.disabled) {
+                generateBboxBtn.click();
+            }
+        });
+
+        // 重置选择
+        resetBtn.addEventListener('click', () => {
+            bboxes = [];
+            updateBboxList();
+            drawFrame();
+            processBtn.disabled = true;
+        });
+
+        // 处理视频
+        processBtn.addEventListener('click', async () => {
+            if (!videoFile || bboxes.length === 0) {
+                showStatus('请先选择视频并框选物体', 'error');
+                return;
+            }
+
+            // 暂停视频
+            video.pause();
+            playPauseBtn.textContent = '播放';
+
+            // 禁用按钮
+            processBtn.disabled = true;
+            showStatus('正在上传视频...', 'info');
+            progress.style.display = 'block';
+            progressBar.style.width = '10%';
+            progressBar.textContent = '上传中...';
+
+            try {
+                // 上传视频
+                const formData = new FormData();
+                formData.append('video', videoFile);
+                
+                const uploadResponse = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadResponse.ok) {
+                    const errorData = await uploadResponse.json();
+                    throw new Error(errorData.error || `上传失败 (HTTP ${uploadResponse.status})`);
+                }
+
+                const uploadResult = await uploadResponse.json();
+                
+                if (uploadResult.status !== 'success') {
+                    throw new Error(uploadResult.error || '上传失败');
+                }
+                
+                // 显示上传成功信息
+                if (uploadResult.size_mb) {
+                    showStatus(`✅ 视频上传成功 (${uploadResult.size_mb} MB)`, 'success');
+                }
+
+                progressBar.style.width = '20%';
+                progressBar.textContent = '生成掩码中...';
+
+                // 调用处理API
+                progressBar.style.width = '30%';
+                progressBar.textContent = '生成掩码中...';
+                
+                // 获取当前帧索引（从视频当前时间计算）
+                // 使用30fps作为默认帧率（与前端显示的帧信息保持一致）
+                const currentFrameIndex = Math.floor(video.currentTime * 30);
+                
+                // 发送处理请求（包含当前帧索引）
+                const responsePromise = fetch('/api/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        video_path: uploadResult.path,
+                        bboxes: bboxes,
+                        start_frame: currentFrameIndex  // 新增：起始帧索引
+                    })
+                });
+                
+                // 更新进度提示（提示用户查看终端输出）
+                progressBar.style.width = '50%';
+                progressBar.textContent = '修复视频中（请查看终端输出了解进度，可能需要较长时间）...';
+                
+                // 等待响应（这可能需要很长时间）
+                const response = await responsePromise;
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '处理失败');
+                }
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = '完成！';
+                    showStatus(`✅ 视频处理完成！物体已删除`, 'success');
+                    
+                    // 显示结果视频
+                    const outputVideo = document.getElementById('outputVideo');
+                    const downloadLink = document.getElementById('downloadLink');
+                    const resultSection = document.getElementById('resultSection');
+                    
+                    outputVideo.src = result.video_url;
+                    downloadLink.href = result.video_url;
+                    downloadLink.download = result.video_path.split('/').pop() || 'output.mp4';
+                    resultSection.style.display = 'block';
+                    
+                    // 滚动到结果区域
+                    resultSection.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    throw new Error(result.error || '处理失败');
+                }
+            } catch (error) {
+                showStatus(`❌ 错误: ${error.message}`, 'error');
+                progressBar.style.width = '0%';
+            } finally {
+                processBtn.disabled = false;
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                }, 3000);
+            }
+        });
+
+        // 显示状态消息
+        function showStatus(message, type) {
+            // 使用innerHTML以支持多行和HTML格式的错误信息
+            status.innerHTML = message.replace(/\n/g, '<br>');
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            // 如果是错误消息，添加白色空格样式以便更好地显示多行文本
+            if (type === 'error') {
+                status.style.whiteSpace = 'pre-wrap';
+                status.style.wordBreak = 'break-word';
+            }
+        }
+    </script>
+</body>
+</html>
+
