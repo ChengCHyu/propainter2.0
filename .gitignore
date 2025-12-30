@@ -188,3 +188,40 @@ desktop.ini
 *.zip
 *.tar
 *.gz
+
+# 安装脚本和环境配置（不要上传）
+install_*.bat
+install_*.ps1
+setup_*.bat
+check_*.py
+check_*.ps1
+check_*.md
+cleanup_*.ps1
+download_*.py
+download_*.ps1
+*安装*.md
+*配置*.md
+PyTorch*.md
+如何*.md
+快速*.md
+推送到*.md
+推送说明.md
+
+# 文档目录（只要README.md）
+docs/
+
+# ProPainter 原始代码（使用submodule引用）
+core/
+model/
+RAFT/
+scripts/
+train.py
+configs/
+inference_propainter.py
+pipeline_end_to_end.py
+complete_pipeline.py
+member_b_track_anything.py
+web-demos/
+datasets/
+utils/
+assets/
