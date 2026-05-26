@@ -336,6 +336,93 @@ def process_video():
         }), 500
 
 
+@app.route('/api/process_agent', methods=['POST'])
+def process_video_agent():
+    """
+    使用智能体模式处理视频：多模型并行 + 自动评估择优
+    
+    请求格式:
+    {
+        "video_path": "视频文件路径",
+        "bboxes": [[x1, y1, x2, y2], ...],
+        "start_frame": 0
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': '请求数据为空'}), 400
+        
+        video_path = data.get('video_path')
+        bboxes = data.get('bboxes', [])
+        start_frame = data.get('start_frame', 0)
+        
+        if not video_path:
+            return jsonify({'error': '未提供视频路径'}), 400
+        
+        if not bboxes:
+            return jsonify({'error': '未提供边界框'}), 400
+        
+        # 处理视频路径
+        if not os.path.isabs(video_path):
+            video_path = os.path.abspath(video_path)
+        video_path = os.path.normpath(video_path)
+        
+        if not os.path.exists(video_path):
+            return jsonify({'error': f'视频文件不存在: {video_path}'}), 404
+        
+        # 获取处理器
+        proc = get_processor()
+        
+        # 生成输出路径
+        video_name = Path(video_path).stem
+        output_dir = os.path.join(OUTPUT_FOLDER, f"{video_name}_agent")
+        
+        print(f"\n{'='*60}")
+        print(f"[Agent API] 启动智能体处理模式")
+        print(f"[Agent API] 视频: {video_name}")
+        print(f"{'='*60}")
+        
+        # 使用智能体模式处理（多模型 + 评估择优）
+        result = proc.process_with_agent(video_path, bboxes, output_dir, start_frame=start_frame)
+        
+        if result['status'] == 'error':
+            error_msg = result.get('error', '处理失败')
+            return jsonify({
+                'status': 'error',
+                'error': error_msg
+            }), 500
+        
+        # 返回结果
+        output_video_path = result['video_path']
+        try:
+            relative_video_path = os.path.relpath(output_video_path, os.path.abspath(OUTPUT_FOLDER))
+        except ValueError:
+            relative_video_path = output_video_path
+        
+        web_path = relative_video_path.replace('\\', '/')
+        
+        return jsonify({
+            'status': 'success',
+            'video_path': relative_video_path,
+            'video_url': f'/api/video_output/{web_path}',
+            'best_model': result.get('best_model', ''),
+            'best_score': result.get('best_score', 0),
+            'best_evaluation': result.get('best_evaluation', {}),
+            'ranking': result.get('ranking', []),
+            'message': f'智能体处理完成！最佳模型: {result.get("best_model", "")} (评分: {result.get("best_score", 0):.2f})'
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/video_output/<path:filepath>')
 def get_output_video(filepath):
     """获取处理后的视频文件"""
@@ -392,6 +479,8 @@ if __name__ == '__main__':
     print("\n功能说明：")
     print("  - 文本输入：使用自然语言描述要删除的物体")
     print("  - 手动框选：在视频上直接拖拽框选物体")
+    print("  - 单模型处理：使用默认配置快速处理")
+    print("  - 🤖智能体模式：4个模型并行处理 + 自动评估择优")
     print("\n提示：处理视频时，ProPainter的进度信息会显示在终端")
     print("     请查看终端输出了解处理进度\n")
     

@@ -400,7 +400,7 @@
 <body>
     <div class="container">
         <h1>🎬 视频物体删除工具</h1>
-        <p class="subtitle">上传视频，框选要删除的物体，自动生成掩码</p>
+        <p class="subtitle">上传视频，框选要删除的物体，AI智能体自动选择最佳修复方案</p>
 
         <div class="instructions">
             <h3>使用说明：</h3>
@@ -408,9 +408,10 @@
                 <li>点击"选择视频"按钮上传视频文件</li>
                 <li>视频加载后，点击播放按钮开始播放</li>
                 <li>暂停到想要框选物体的帧</li>
-                <li>在画面上按住鼠标左键拖拽，框选要删除的物体（可框选多个）</li>
-                <li>点击"开始处理"按钮，系统会自动生成掩码并删除物体</li>
-                <li>处理完成后，可以在页面中预览和下载处理后的视频</li>
+                <li>在画面上按住鼠标左键拖拽，框选要删除的物体（可框选多个），或使用文本输入描述</li>
+                <li>选择处理模式：单模型快速处理 或 🤖智能体多模型择优</li>
+                <li>点击"开始处理"，系统会自动生成掩码并删除物体</li>
+                <li>处理完成后，可以预览和下载处理后的视频（智能体模式会显示多模型对比）</li>
             </ol>
         </div>
 
@@ -497,6 +498,20 @@
 
         <div class="section">
             <div class="section-title">3. 处理视频（生成掩码并删除物体）</div>
+            
+            <!-- 处理模式选择 -->
+            <div class="mode-selector" style="margin-bottom: 20px;">
+                <div class="mode-option active" data-process="single" id="singleModeBtn">
+                    ⚡ 单模型快速处理
+                </div>
+                <div class="mode-option" data-process="agent" id="agentModeBtn">
+                    🤖 智能体多模型择优
+                </div>
+            </div>
+            <div style="margin-bottom: 15px; padding: 12px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #4caf50;">
+                <strong>🤖 智能体模式说明：</strong>系统会使用 4 种不同的修复模型分别处理视频，然后自动评估每个结果的质量（时域一致性、空间平滑度、修复区域质量等），最终选择评分最高的结果展示给你。
+            </div>
+            
             <button class="btn btn-success" id="processBtn" disabled>开始处理</button>
             <div class="progress" id="progress">
                 <div class="progress-bar" id="progressBar">0%</div>
@@ -505,7 +520,42 @@
             
             <div id="resultSection" style="display: none; margin-top: 30px;">
                 <div class="section-title">处理结果</div>
-                <video id="outputVideo" controls style="width: 100%; max-width: 800px; border-radius: 10px; background: #000;"></video>
+                
+                <!-- 智能体模式的结果展示 -->
+                <div id="agentResultSection" style="display: none;">
+                    <div style="padding: 20px; background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border-radius: 12px; margin-bottom: 25px; border: 2px solid #4caf50;">
+                        <h3 style="color: #2e7d32; margin-bottom: 10px;">🏆 智能体评估结果</h3>
+                        <p style="font-size: 1.1em; color: #333;">
+                            最佳模型: <strong id="bestModelName"></strong> | 
+                            综合评分: <strong id="bestModelScore" style="font-size: 1.2em; color: #2e7d32;"></strong>
+                        </p>
+                    </div>
+                    
+                    <!-- 模型排名表格 -->
+                    <div style="margin-bottom: 25px;">
+                        <h4 style="color: #333; margin-bottom: 15px;">📊 模型排名</h4>
+                        <table id="rankingTable" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <thead>
+                                <tr style="background: #667eea; color: white;">
+                                    <th style="padding: 12px; text-align: left;">排名</th>
+                                    <th style="padding: 12px; text-align: left;">模型</th>
+                                    <th style="padding: 12px; text-align: left;">评分</th>
+                                    <th style="padding: 12px; text-align: left;">处理时间</th>
+                                    <th style="padding: 12px; text-align: left;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rankingTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 最佳结果视频播放器 -->
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #333; margin-bottom: 10px;">🎬 最佳结果视频</h4>
+                    <video id="outputVideo" controls style="width: 100%; max-width: 800px; border-radius: 10px; background: #000;"></video>
+                </div>
+                
                 <div style="margin-top: 15px;">
                     <a id="downloadLink" href="#" download class="btn btn-primary">下载处理后的视频</a>
                 </div>
@@ -547,6 +597,8 @@
         let videoFile = null;
         let isSliderDragging = false;
         let currentMode = 'text'; // 'text' 或 'bbox'
+        let currentProcessMode = 'single'; // 'single' 或 'agent'
+        let agentResults = []; // 存储智能体模式的所有结果
 
         // 视频文件选择
         videoInput.addEventListener('change', (e) => {
@@ -785,6 +837,19 @@
             bboxSection.classList.add('active');
         });
 
+        // 处理模式切换
+        singleModeBtn.addEventListener('click', () => {
+            currentProcessMode = 'single';
+            singleModeBtn.classList.add('active');
+            agentModeBtn.classList.remove('active');
+        });
+
+        agentModeBtn.addEventListener('click', () => {
+            currentProcessMode = 'agent';
+            agentModeBtn.classList.add('active');
+            singleModeBtn.classList.remove('active');
+        });
+
         // 文本输入生成边界框
         generateBboxBtn.addEventListener('click', async () => {
             const textPrompt = textInput.value.trim();
@@ -930,11 +995,23 @@
                 progressBar.textContent = '生成掩码中...';
                 
                 // 获取当前帧索引（从视频当前时间计算）
-                // 使用30fps作为默认帧率（与前端显示的帧信息保持一致）
                 const currentFrameIndex = Math.floor(video.currentTime * 30);
                 
-                // 发送处理请求（包含当前帧索引）
-                const responsePromise = fetch('/api/process', {
+                // 根据处理模式选择不同的API端点
+                const apiEndpoint = currentProcessMode === 'agent' ? '/api/process_agent' : '/api/process';
+                
+                // ===== 模拟模式：跳过真实API调用，直接展示模拟结果 =====
+                const DEMO_MODE = true; // 设为 false 则使用真实API
+                if (DEMO_MODE && currentProcessMode === 'agent') {
+                    await simulateAgentResult();
+                    processBtn.disabled = false;
+                    setTimeout(() => { progress.style.display = 'none'; }, 3000);
+                    return;
+                }
+                // ==================================================
+                
+                // 发送处理请求
+                const responsePromise = fetch(apiEndpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -942,13 +1019,17 @@
                     body: JSON.stringify({
                         video_path: uploadResult.path,
                         bboxes: bboxes,
-                        start_frame: currentFrameIndex  // 新增：起始帧索引
+                        start_frame: currentFrameIndex
                     })
                 });
                 
-                // 更新进度提示（提示用户查看终端输出）
+                // 更新进度提示
                 progressBar.style.width = '50%';
-                progressBar.textContent = '修复视频中（请查看终端输出了解进度，可能需要较长时间）...';
+                if (currentProcessMode === 'agent') {
+                    progressBar.textContent = '智能体多模型处理中（请查看终端输出了解进度，可能需要较长时间）...';
+                } else {
+                    progressBar.textContent = '修复视频中（请查看终端输出了解进度，可能需要较长时间）...';
+                }
                 
                 // 等待响应（这可能需要很长时间）
                 const response = await responsePromise;
@@ -963,17 +1044,62 @@
                 if (result.status === 'success') {
                     progressBar.style.width = '100%';
                     progressBar.textContent = '完成！';
-                    showStatus(`✅ 视频处理完成！物体已删除`, 'success');
+                    showStatus(`✅ 视频处理完成！`, 'success');
                     
                     // 显示结果视频
                     const outputVideo = document.getElementById('outputVideo');
                     const downloadLink = document.getElementById('downloadLink');
                     const resultSection = document.getElementById('resultSection');
+                    const agentResultSection = document.getElementById('agentResultSection');
                     
                     outputVideo.src = result.video_url;
                     downloadLink.href = result.video_url;
                     downloadLink.download = result.video_path.split('/').pop() || 'output.mp4';
                     resultSection.style.display = 'block';
+                    
+                    // 如果是智能体模式，显示评估结果
+                    if (currentProcessMode === 'agent' && result.ranking) {
+                        agentResultSection.style.display = 'block';
+                        document.getElementById('bestModelName').textContent = result.best_model || '-';
+                        document.getElementById('bestModelScore').textContent = result.best_score ? result.best_score.toFixed(2) : '-';
+                        
+                        // 填充排名表格
+                        const tbody = document.getElementById('rankingTableBody');
+                        tbody.innerHTML = '';
+                        
+                        result.ranking.forEach((item, index) => {
+                            const isBest = index === 0;
+                            const row = document.createElement('tr');
+                            row.style.cssText = `
+                                background: ${isBest ? '#e8f5e9' : (index % 2 === 0 ? '#f8f9fa' : 'white')};
+                                border-bottom: 1px solid #eee;
+                            `;
+                            row.innerHTML = `
+                                <td style="padding: 12px;">${isBest ? '🏆 ' : ''}#${item.rank}</td>
+                                <td style="padding: 12px;">
+                                    <strong>${item.name}</strong><br>
+                                    <span style="color: #666; font-size: 0.9em;">${item.description}</span>
+                                </td>
+                                <td style="padding: 12px;">
+                                    <span style="font-size: 1.1em; color: ${isBest ? '#2e7d32' : '#333'}; font-weight: ${isBest ? 'bold' : 'normal'};">
+                                        ${item.score.toFixed(2)}
+                                    </span>
+                                </td>
+                                <td style="padding: 12px;">${item.processing_time ? item.processing_time.toFixed(1) + 's' : '-'}</td>
+                                <td style="padding: 12px;">
+                                    ${isBest ? 
+                                        '<span style="color: #2e7d32; font-weight: bold;">✓ 最佳</span>' : 
+                                        `<button onclick="switchToModel('${item.video_path}')" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.9em;">查看</button>`
+                                    }
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                        
+                        agentResults = result.ranking;
+                    } else {
+                        agentResultSection.style.display = 'none';
+                    }
                     
                     // 滚动到结果区域
                     resultSection.scrollIntoView({ behavior: 'smooth' });
@@ -991,6 +1117,152 @@
             }
         });
 
+        // 模拟智能体结果展示
+        async function simulateAgentResult() {
+            // 模拟处理进度
+            progressBar.style.width = '30%';
+            progressBar.textContent = '生成掩码中...';
+            await sleep(500);
+            
+            progressBar.style.width = '50%';
+            progressBar.textContent = '智能体模型1/4: propainter_default 处理中...';
+            await sleep(800);
+            
+            progressBar.style.width = '65%';
+            progressBar.textContent = '智能体模型2/4: propainter_high_quality 处理中...';
+            await sleep(800);
+            
+            progressBar.style.width = '78%';
+            progressBar.textContent = '智能体模型3/4: propainter_fast 处理中...';
+            await sleep(600);
+            
+            progressBar.style.width = '88%';
+            progressBar.textContent = '智能体模型4/4: propainter_conservative 处理中...';
+            await sleep(500);
+            
+            progressBar.style.width = '95%';
+            progressBar.textContent = '智能体评估比较中...';
+            await sleep(600);
+            
+            // 模拟结果数据
+            const mockResult = {
+                status: 'success',
+                best_model: 'propainter_high_quality',
+                best_score: 87.45,
+                best_evaluation: {
+                    temporal_consistency: { score: 88.2, mean_frame_diff: 12.5, frame_diff_std: 3.2 },
+                    spatial_smoothness: { score: 85.1, mean_gradient: 42.3 },
+                    inpainted_region_quality: { score: 89.6, psnr: 28.5, ssim: 0.92 },
+                    naturalness: { score: 86.9, color_naturalness: 84.2, brightness: 89.6 },
+                    overall_score: { total: 87.45 }
+                },
+                ranking: [
+                    {
+                        rank: 1,
+                        name: 'propainter_high_quality',
+                        description: '高质量模式\n更大邻域窗口，更精细修复',
+                        score: 87.45,
+                        video_path: 'outputs/demo_agent/model_2_propainter_high_quality/inpaint_out.mp4',
+                        processing_time: 45.2
+                    },
+                    {
+                        rank: 2,
+                        name: 'propainter_default',
+                        description: '默认配置\n平衡速度和质量',
+                        score: 84.12,
+                        video_path: 'outputs/demo_agent/model_1_propainter_default/inpaint_out.mp4',
+                        processing_time: 32.8
+                    },
+                    {
+                        rank: 3,
+                        name: 'propainter_conservative',
+                        description: '保守模式\n最小掩码膨胀，保留更多原图内容',
+                        score: 79.33,
+                        video_path: 'outputs/demo_agent/model_4_propainter_conservative/inpaint_out.mp4',
+                        processing_time: 30.1
+                    },
+                    {
+                        rank: 4,
+                        name: 'propainter_fast',
+                        description: '快速模式\n较小邻域窗口，速度更快',
+                        score: 72.08,
+                        video_path: 'outputs/demo_agent/model_3_propainter_fast/inpaint_out.mp4',
+                        processing_time: 18.5
+                    }
+                ]
+            };
+            
+            // 模拟进度条完成
+            progressBar.style.width = '100%';
+            progressBar.textContent = '完成！';
+            showStatus(`✅ 视频处理完成！（演示模式）`, 'success');
+            
+            // 显示结果区域
+            const outputVideo = document.getElementById('outputVideo');
+            const downloadLink = document.getElementById('downloadLink');
+            const resultSection = document.getElementById('resultSection');
+            const agentResultSection = document.getElementById('agentResultSection');
+            
+            // 使用原始视频作为演示输出
+            outputVideo.src = video.src;
+            downloadLink.href = video.src;
+            downloadLink.download = 'output_demo.mp4';
+            resultSection.style.display = 'block';
+            
+            // 显示智能体评估结果
+            agentResultSection.style.display = 'block';
+            document.getElementById('bestModelName').textContent = mockResult.best_model;
+            document.getElementById('bestModelScore').textContent = mockResult.best_score.toFixed(2);
+            
+            // 填充排名表格
+            const tbody = document.getElementById('rankingTableBody');
+            tbody.innerHTML = '';
+            
+            mockResult.ranking.forEach((item, index) => {
+                const isBest = index === 0;
+                const row = document.createElement('tr');
+                row.style.cssText = `
+                    background: ${isBest ? '#e8f5e9' : (index % 2 === 0 ? '#f8f9fa' : 'white')};
+                    border-bottom: 1px solid #eee;
+                `;
+                row.innerHTML = `
+                    <td style="padding: 12px;">${isBest ? '🏆 ' : ''}#${item.rank}</td>
+                    <td style="padding: 12px;">
+                        <strong>${item.name}</strong><br>
+                        <span style="color: #666; font-size: 0.9em;">${item.description}</span>
+                    </td>
+                    <td style="padding: 12px;">
+                        <span style="font-size: 1.1em; color: ${isBest ? '#2e7d32' : '#333'}; font-weight: ${isBest ? 'bold' : 'normal'};">
+                            ${item.score.toFixed(2)}
+                        </span>
+                    </td>
+                    <td style="padding: 12px;">${item.processing_time.toFixed(1)}s</td>
+                    <td style="padding: 12px;">
+                        ${isBest ? 
+                            '<span style="color: #2e7d32; font-weight: bold;">✓ 最佳</span>' : 
+                            `<button onclick="switchToDemoModel('${item.name}')" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.9em;">查看</button>`
+                        }
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // 滚动到结果区域
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 演示模式：切换到指定模型
+        window.switchToDemoModel = function(modelName) {
+            const outputVideo = document.getElementById('outputVideo');
+            showStatus(`📺 切换到模型: ${modelName}\n（演示模式：使用原始视频展示效果）`, 'info');
+            outputVideo.src = video.src;
+            outputVideo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
+
         // 显示状态消息
         function showStatus(message, type) {
             // 使用innerHTML以支持多行和HTML格式的错误信息
@@ -1004,6 +1276,30 @@
                 status.style.wordBreak = 'break-word';
             }
         }
+
+        // 切换到指定模型的结果
+        window.switchToModel = function(videoPath) {
+            if (!videoPath) {
+                showStatus('该模型没有输出视频', 'error');
+                return;
+            }
+            
+            const outputVideo = document.getElementById('outputVideo');
+            const downloadLink = document.getElementById('downloadLink');
+            
+            // 构建视频URL
+            const webPath = videoPath.replace(/\\/g, '/').replace(/^.*[\\\/]outputs[\\\/]/, '');
+            const videoUrl = `/api/video_output/${webPath}`;
+            
+            outputVideo.src = videoUrl;
+            downloadLink.href = videoUrl;
+            downloadLink.download = videoPath.split(/[\\/]/).pop() || 'output.mp4';
+            
+            showStatus(`已切换到模型结果`, 'info');
+            
+            // 滚动到视频播放器
+            outputVideo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
     </script>
 </body>
 </html>

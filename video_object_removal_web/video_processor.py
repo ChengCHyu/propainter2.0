@@ -2,6 +2,7 @@
 视频处理API包装器
 隐藏内部实现细节，提供干净的接口
 包含完整的处理流程：生成掩码 + ProPainter修复
+支持单模型处理和智能体多模型择优处理
 """
 
 import os
@@ -15,13 +16,27 @@ from pathlib import Path
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
+# 修复：移除可能导致cv2递归导入的错误路径
+# 某些依赖会将cv2目录本身加入sys.path，导致cv2自引用递归
+_cleaned_paths = []
+for p in sys.path:
+    if p.endswith(os.path.sep + 'cv2') or p.endswith('/cv2') or p == 'cv2':
+        continue
+    _cleaned_paths.append(p)
+sys.path = _cleaned_paths
+
 try:
     from member_b.member_b_track_anything import MemberBTrackAnything
-except ImportError:
+except Exception as e:
+    import traceback
+    print(f"[DEBUG] 第一次导入失败: {type(e).__name__}: {e}")
+    traceback.print_exc()
     try:
         sys.path.insert(0, os.path.join(parent_dir, 'member_b'))
         from member_b_track_anything import MemberBTrackAnything
-    except ImportError:
+    except Exception as e2:
+        print(f"[DEBUG] 第二次导入失败: {type(e2).__name__}: {e2}")
+        traceback.print_exc()
         MemberBTrackAnything = None
 
 
@@ -122,12 +137,14 @@ class VideoProcessor:
             propainter_output_dir = os.path.join(output_dir, 'inpainted')
             os.makedirs(propainter_output_dir, exist_ok=True)
             
-            # 调用ProPainter
-            propainter_script = os.path.join(parent_dir, 'inference_propainter.py')
+            # 调用ProPainter - 尝试多个可能的位置
+            propainter_script = os.path.join(parent_dir, 'ProPainter', 'inference_propainter.py')
+            if not os.path.exists(propainter_script):
+                propainter_script = os.path.join(parent_dir, 'inference_propainter.py')
             if not os.path.exists(propainter_script):
                 return {
                     'status': 'error',
-                    'error': 'ProPainter脚本不存在，请确保inference_propainter.py在项目根目录'
+                    'error': 'ProPainter脚本不存在，请确保inference_propainter.py在项目根目录或ProPainter目录'
                 }
             
             # 确保所有路径都是绝对路径
@@ -142,7 +159,8 @@ class VideoProcessor:
                 propainter_script,
                 '-i', abs_video_path,
                 '-m', abs_mask_path,
-                '-o', abs_output_dir
+                '-o', abs_output_dir,
+                '--fp16',  # 启用半精度推理加速
             ]
             
             # 检查ProPainter模型是否存在
@@ -222,6 +240,96 @@ class VideoProcessor:
                 'video_path': output_video_path,
                 'mask_path': mask_path,
                 'status': 'success'
+            }
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {
+                'status': 'error',
+                'error': str(e)
+            }
+    
+    def process_with_agent(self, video_path, bboxes, output_dir, start_frame=0):
+        """
+        使用智能体模式处理视频：多模型并行 + 自动评估择优
+        
+        Args:
+            video_path: 视频文件路径
+            bboxes: 边界框列表 [[x1, y1, x2, y2], ...]
+            output_dir: 输出目录
+            start_frame: 起始帧索引（默认0）
+        
+        Returns:
+            dict: 处理结果
+                - status: 状态
+                - best_model: 最佳模型名称
+                - best_video_path: 最佳结果视频路径
+                - best_score: 最佳评分
+                - ranking: 所有模型排名
+        """
+        try:
+            from video_agent import VideoInpaintingAgent
+            
+            proc = self._get_processor()
+            
+            # 确保output_dir是绝对路径
+            output_dir = os.path.abspath(output_dir)
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # 步骤1：生成掩码（所有模型共用同一掩码）
+            mask_dir = os.path.join(output_dir, 'masks')
+            mask_dir = os.path.abspath(mask_dir)
+            os.makedirs(mask_dir, exist_ok=True)
+            
+            video_path = os.path.abspath(video_path)
+            
+            with self._suppress_stdout() if self.suppress_output else self._noop():
+                mask_path, masks = proc.process_video(
+                    video_path=video_path,
+                    bboxes=bboxes,
+                    start_frame=start_frame,
+                    output_mask_path=mask_dir,
+                    save_frames=True
+                )
+            
+            mask_path = os.path.abspath(mask_path)
+            
+            # 清理临时文件
+            mask_video_path = os.path.join(mask_path, 'mask_video.mp4')
+            if os.path.exists(mask_video_path):
+                try:
+                    os.remove(mask_video_path)
+                except:
+                    pass
+            
+            # 步骤2：使用Agent进行多模型修复 + 评估择优
+            agent_output_dir = os.path.join(output_dir, 'agent_results')
+            os.makedirs(agent_output_dir, exist_ok=True)
+            
+            agent = VideoInpaintingAgent(
+                parent_dir=parent_dir,
+                suppress_output=self.suppress_output
+            )
+            
+            result = agent.process_with_agent(
+                video_path=video_path,
+                mask_path=mask_path,
+                output_dir=agent_output_dir
+            )
+            
+            if result['status'] == 'error':
+                return result
+            
+            return {
+                'status': 'success',
+                'video_path': result['best_video_path'],
+                'mask_path': mask_path,
+                'best_model': result['best_model'],
+                'best_score': result['best_score'],
+                'best_evaluation': result['best_evaluation'],
+                'ranking': result['ranking'],
+                'all_results': result['all_results']
             }
             
         except Exception as e:

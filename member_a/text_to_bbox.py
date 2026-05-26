@@ -10,6 +10,16 @@
 
 import os
 import sys
+
+# 修复：在导入cv2之前清理sys.path，移除可能导致递归导入的cv2目录
+_cleaned_paths = []
+for p in sys.path:
+    normalized = p.replace('\\', '/').rstrip('/')
+    if normalized.endswith('/cv2'):
+        continue
+    _cleaned_paths.append(p)
+sys.path = _cleaned_paths
+
 import cv2
 import numpy as np
 import torch
